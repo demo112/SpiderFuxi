@@ -10,8 +10,7 @@ from proxy_builing import init
 
 class GetIpPort:
     def __init__(self):
-        self.proxy = random.random(self.proxy_info_checked)
-        self.page_range = 1
+        self.page_range = (1, 1)
         self.headers = {}
         self.proxy_info = []
         self.proxy_info_checked = []
@@ -19,14 +18,17 @@ class GetIpPort:
         self.PATH = "/Users/cooper/PycharmProjects/SpiderFuxi/proxy_builing/page_save/"
         self.BASE_URL = "https://www.kuaidaili.com/free/inha/"
 
-    def first_try(self):
-
-        pass
-
+    def checkout_local_proxy(self):
+        """从本地检出之前有效代理记录"""
+        with open('proxy_list_checked.csv', 'r', encoding='utf-8') as first:
+            lines = csv.DictReader(first)
+            lines_dic = [row for row in lines]
+            self.proxy_info = lines_dic
+            # print(lines_dic)
 
     def make_url(self):
         """根据需要构造url，明确访问多少页"""
-        for p in range(self.page_range):
+        for p in range(self.page_range[0] - 1, self.page_range[1]):
             page_url = self.BASE_URL + str(p + 1) + "/"
             self.url_list.insert(p, page_url)
         # print(self.url_list)
@@ -36,20 +38,32 @@ class GetIpPort:
         random_headers = random.sample(init.UserAgent, 1)[0]
         # print(random_headers)
         self.headers = {"User-Agent": random_headers}
+        proxy = random.sample(self.proxy_info, 1)[0]
+        self.proxy = {"http": proxy["ip"] + ":" + proxy["port"]}
         pass
 
     def get_page(self):
         """获取真是线上网页"""
         self.make_url()
-        for url in self.url_list:
+        well_num = 0
+        page_nums = len(self.url_list)
+        for page_num in range(page_nums):
+            url = self.url_list[page_num]
+            page_num += 1
             time.sleep(5)
             self.make_proxy()
-            print("正在爬取第%s页" % url[-2:-1])
-            # todo 需要继续完善，完善之前，访问本地页面测试
-            response = requests.get(url, headers=self.headers, proxies=self.)
-            page_data = response.text
-            # print(page_data)
-            self.page_save(url[-2:-1], page_data)
+            print("正在爬取第%s页" % page_num)
+            try:
+                print("使用一下信息爬取：")
+                print("Proxy:", self.proxy)
+                print("Headers:", self.headers)
+                response = requests.get(url, headers=self.headers, proxies=self.proxy, timeout=1)
+                page_data = response.text
+                self.page_save(page_num, page_data)
+                well_num += 1
+            except Exception as e:
+                print("请求失败，原因：", e)
+        print("网页爬取结束，有效爬取：%d页" % well_num)
 
     def page_save(self, name, save_page):
         """保存网页至本地方便后续使用"""
@@ -99,7 +113,7 @@ class GetIpPort:
 
     def building_pars_line(self):
         """发起网页解析任务"""
-        for p in range(self.page_range):
+        for p in range(self.page_range[0] - 1, self.page_range[1]):
             file_name = str(p + 1) + ".html"
             page = self.read_page(file_name)
             self.parse_page(page)
@@ -108,11 +122,13 @@ class GetIpPort:
     def save_as_csv(self):
         with open("proxy_list_checked.csv", 'w', newline='') as a:
             writer = csv.writer(a)
+            # todo 有时间尝试DirWriter()方法
             writer.writerow(self.proxy_info_checked[0].keys())  # 以字典的键作为表头
             for r in self.proxy_info_checked:
                 writer.writerow(r.values())  # 以字典的值作为内容
 
     def check_ip(self):
+        self.proxy_info_checked = []
         for proxy in self.proxy_info:
             self.make_proxy()
             UserAgent = self.headers
@@ -121,16 +137,26 @@ class GetIpPort:
                 response_1 = requests.get("https://www.baidu.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
                 response_2 = requests.get("https://www.taobao.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
                 response_3 = requests.get("https://www.qq.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
-                if response_1.status_code == response_2.status_code == response_3.status_code == 200:
+                flag = input("是否验证快代理（验证有风险，建议可用代理较少时使用）：")
+                print("验  证：Y")
+                print("不验证：N")
+                if flag == "Y":
+                    response_4 = requests.get("https://www.kuaidaili.com/free/inha/100", headers=UserAgent,
+                                              proxies=ip_port, timeout=0.1)
+                else:
+                    response_4.status_code == 200
+
+                if response_1.status_code == response_2.status_code == response_3.status_code == response_4.status_code == 200:
                     self.proxy_info_checked.append(proxy)
                     pass
             except Exception as e:
                 print(e)
+        print("本轮检测可用代理数量: %d条" % len(self.proxy_info_checked))
 
     def choose(self):
         print("1、在线爬取")
         print("2、本地爬取")
-        way = input("请选择获取数据的方式：")
+        way = int(input("请选择获取数据的方式："))
         if way == 1:
             self.get_page()
         else:
@@ -141,9 +167,15 @@ class GetIpPort:
         self.building_pars_line()
         self.check_ip()
         self.save_as_csv()
-        print(len(self.proxy_info_checked))
+
+    def test_local_proxy(self):
+        self.checkout_local_proxy()
+        self.check_ip()
+        self.save_as_csv()
+        print("测试结束，本地代理信息可用")
 
 
 if __name__ == '__main__':
     get_ip_port = GetIpPort()
-    get_ip_port.main()
+    get_ip_port.test_local_proxy()  # 检测本地资源有效性
+    # get_ip_port.main()    # 直接上线爬取，会直接访问网站，慎重
