@@ -10,7 +10,7 @@ from proxy_builing import init
 
 class GetIpPort:
     def __init__(self):
-        self.page_range = (1, 1)
+        self.page_range = (1, 5)
         self.headers = {}
         self.proxy_info = []
         self.proxy_info_checked = []
@@ -44,25 +44,43 @@ class GetIpPort:
 
     def get_page(self):
         """获取真是线上网页"""
+
+        def try_to_get(flag):
+            if flag == 1:
+                print("使用以下信息爬取：")
+                print("Proxy:", self.proxy)
+                print("Headers:", self.headers)
+                response = requests.get(url, headers=self.headers, proxies=self.proxy, timeout=1)
+            else:
+                print("使用本地IP爬取")
+                response = requests.get(url, headers=self.headers, timeout=1)
+            page_data = response.text
+            self.page_save(page_num, page_data)
+
         self.make_url()
-        well_num = 0
+        well_num = 0  # 有效页数
         page_nums = len(self.url_list)
         for page_num in range(page_nums):
             url = self.url_list[page_num]
             page_num += 1
             time.sleep(5)
-            self.make_proxy()
+            if self.proxy_info_checked:
+                self.make_proxy()
             print("正在爬取第%s页" % page_num)
-            try:
-                print("使用一下信息爬取：")
-                print("Proxy:", self.proxy)
-                print("Headers:", self.headers)
-                response = requests.get(url, headers=self.headers, proxies=self.proxy, timeout=1)
-                page_data = response.text
-                self.page_save(page_num, page_data)
-                well_num += 1
-            except Exception as e:
-                print("请求失败，原因：", e)
+            while True:
+                try:
+                    flag = 1
+                    try_to_get(flag)
+                    well_num += 1
+                    break
+                except Exception as e:
+                    print("本地无可用代理，直接使用本地ip爬取【高风险】")
+                    self.page_range = (1, 2)
+                    flag = 0
+                    try_to_get(flag)
+                    well_num += 1
+                    print("请求失败，原因：", e)
+                    break
         print("网页爬取结束，有效爬取：%d页" % well_num)
 
     def page_save(self, name, save_page):
@@ -120,12 +138,15 @@ class GetIpPort:
         print(self.proxy_info)
 
     def save_as_csv(self):
-        with open("proxy_list_checked.csv", 'w', newline='') as a:
-            writer = csv.writer(a)
-            # todo 有时间尝试DirWriter()方法
-            writer.writerow(self.proxy_info_checked[0].keys())  # 以字典的键作为表头
-            for r in self.proxy_info_checked:
-                writer.writerow(r.values())  # 以字典的值作为内容
+        if len(self.proxy_info_checked) == 0:
+            pass
+        else:
+            with open("proxy_list_checked.csv", 'w', newline='') as a:
+                writer = csv.writer(a)
+                # todo 有时间尝试DirWriter()方法
+                writer.writerow(self.proxy_info_checked[0].keys())  # 以字典的键作为表头
+                for r in self.proxy_info_checked:
+                    writer.writerow(r.values())  # 以字典的值作为内容
 
     def check_ip(self):
         self.proxy_info_checked = []
@@ -137,16 +158,14 @@ class GetIpPort:
                 response_1 = requests.get("https://www.baidu.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
                 response_2 = requests.get("https://www.taobao.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
                 response_3 = requests.get("https://www.qq.com", headers=UserAgent, proxies=ip_port, timeout=0.1)
-                flag = input("是否验证快代理（验证有风险，建议可用代理较少时使用）：")
-                print("验  证：Y")
-                print("不验证：N")
-                if flag == "Y":
-                    response_4 = requests.get("https://www.kuaidaili.com/free/inha/100", headers=UserAgent,
-                                              proxies=ip_port, timeout=0.1)
-                else:
-                    response_4.status_code == 200
+                # if flag == "Y":
+                #     response_4 = requests.get("https://www.kuaidaili.com/free/inha/100", headers=UserAgent,
+                #                               proxies=ip_port, timeout=0.1)
+                # else:
+                #     response_4.status_code == 200
 
-                if response_1.status_code == response_2.status_code == response_3.status_code == response_4.status_code == 200:
+                # if response_1.status_code == response_2.status_code == response_3.status_code == response_4.status_code == 200:
+                if response_1.status_code == response_2.status_code == response_3.status_code == 200:
                     self.proxy_info_checked.append(proxy)
                     pass
             except Exception as e:
@@ -178,4 +197,4 @@ class GetIpPort:
 if __name__ == '__main__':
     get_ip_port = GetIpPort()
     get_ip_port.test_local_proxy()  # 检测本地资源有效性
-    # get_ip_port.main()    # 直接上线爬取，会直接访问网站，慎重
+    get_ip_port.main()  # 直接上线爬取，会直接访问网站，慎重
